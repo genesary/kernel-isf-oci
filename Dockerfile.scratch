@@ -1,0 +1,16 @@
+# Minimal OCI image containing only the ISF JSON file.
+#
+# Works as:
+#   - Kubernetes Image Volume (K8s 1.31+): mount directly as read-only volume
+#   - oras pull: extract the ISF JSON file
+#   - crane export: extract from OCI layers
+#   - docker cp: create temp container and copy out
+#
+# Build args:
+#   SYMBOL_ID  - Identifier matching the builder output
+
+ARG SYMBOL_ID
+
+FROM scratch
+ARG SYMBOL_ID
+COPY --from=builder /output/${SYMBOL_ID}.json /symbols/linux/${SYMBOL_ID}.json

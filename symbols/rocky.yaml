@@ -1,0 +1,21 @@
+# Rocky Linux kernel ISF symbols
+#
+# Fields:
+#   kernel:    uname -r output (used as image tag)
+#   version:   Rocky Linux release version
+#   debug_url: URL to the kernel-debuginfo RPM
+#   status:    pending | building | built | failed
+#
+# Debug packages: https://download.rockylinux.org/pub/rocky/9/BaseOS/x86_64/debug/tree/Packages/k/
+
+distro: rocky
+symbols:
+  # ── Rocky Linux 9 ──
+  - kernel: "5.14.0-611.47.1.el9_7.x86_64"
+    version: "9"
+    debug_url: "https://download.rockylinux.org/pub/rocky/9/BaseOS/x86_64/debug/tree/Packages/k/kernel-debuginfo-5.14.0-611.47.1.el9_7.x86_64.rpm"
+    status: pending
+  - kernel: "5.14.0-611.45.1.el9_7.x86_64"
+    version: "9"
+    debug_url: "https://download.rockylinux.org/pub/rocky/9/BaseOS/x86_64/debug/tree/Packages/k/kernel-debuginfo-5.14.0-611.45.1.el9_7.x86_64.rpm"
+    status: pending

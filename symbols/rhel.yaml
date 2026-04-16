@@ -1,0 +1,14 @@
+# RHEL kernel ISF symbols
+#
+# Fields:
+#   kernel:    uname -r output (used as image tag)
+#   version:   RHEL release version
+#   debug_url: URL to the kernel-debuginfo RPM
+#   status:    pending | building | built | failed
+#
+# Note: RHEL debuginfo packages require a subscription to access from
+# Red Hat CDN. CentOS Stream packages (centos.yaml) are freely available
+# and share the same .el9 kernel base.
+
+distro: rhel
+symbols: []

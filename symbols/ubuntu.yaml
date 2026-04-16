@@ -1,0 +1,115 @@
+# Ubuntu kernel ISF symbols
+#
+# Fields:
+#   kernel:    uname -r output (used as image tag)
+#   version:   Ubuntu release version
+#   debug_url: URL to the linux-image-*-dbgsym .ddeb package
+#   status:    pending | building | built | failed
+
+distro: ubuntu
+symbols:
+  # ── Ubuntu 24.04 LTS (Noble) — kernel 6.8.0 ──
+  - kernel: "6.8.0-110-generic"
+    version: "24.04"
+    debug_url: "http://ddebs.ubuntu.com/pool/main/l/linux/linux-image-unsigned-6.8.0-110-generic-dbgsym_6.8.0-110.110_amd64.ddeb"
+    status: pending
+  - kernel: "6.8.0-108-generic"
+    version: "24.04"
+    debug_url: "http://ddebs.ubuntu.com/pool/main/l/linux/linux-image-unsigned-6.8.0-108-generic-dbgsym_6.8.0-108.108_amd64.ddeb"
+    status: pending
+  - kernel: "6.8.0-107-generic"
+    version: "24.04"
+    debug_url: "http://ddebs.ubuntu.com/pool/main/l/linux/linux-image-unsigned-6.8.0-107-generic-dbgsym_6.8.0-107.107_amd64.ddeb"
+    status: pending
+  - kernel: "6.8.0-106-generic"
+    version: "24.04"
+    debug_url: "http://ddebs.ubuntu.com/pool/main/l/linux/linux-image-unsigned-6.8.0-106-generic-dbgsym_6.8.0-106.106_amd64.ddeb"
+    status: pending
+  - kernel: "6.8.0-104-generic"
+    version: "24.04"
+    debug_url: "http://ddebs.ubuntu.com/pool/main/l/linux/linux-image-unsigned-6.8.0-104-generic-dbgsym_6.8.0-104.104_amd64.ddeb"
+    status: pending
+  - kernel: "6.8.0-103-generic"
+    version: "24.04"
+    debug_url: "http://ddebs.ubuntu.com/pool/main/l/linux/linux-image-unsigned-6.8.0-103-generic-dbgsym_6.8.0-103.103_amd64.ddeb"
+    status: pending
+  - kernel: "6.8.0-101-generic"
+    version: "24.04"
+    debug_url: "http://ddebs.ubuntu.com/pool/main/l/linux/linux-image-unsigned-6.8.0-101-generic-dbgsym_6.8.0-101.101_amd64.ddeb"
+    status: pending
+  - kernel: "6.8.0-100-generic"
+    version: "24.04"
+    debug_url: "http://ddebs.ubuntu.com/pool/main/l/linux/linux-image-unsigned-6.8.0-100-generic-dbgsym_6.8.0-100.100_amd64.ddeb"
+    status: pending
+  - kernel: "6.8.0-94-generic"
+    version: "24.04"
+    debug_url: "http://ddebs.ubuntu.com/pool/main/l/linux/linux-image-unsigned-6.8.0-94-generic-dbgsym_6.8.0-94.94_amd64.ddeb"
+    status: pending
+  - kernel: "6.8.0-93-generic"
+    version: "24.04"
+    debug_url: "http://ddebs.ubuntu.com/pool/main/l/linux/linux-image-unsigned-6.8.0-93-generic-dbgsym_6.8.0-93.93_amd64.ddeb"
+    status: pending
+
+  # ── Ubuntu 22.04 LTS (Jammy) — kernel 5.15.0 ──
+  - kernel: "5.15.0-176-generic"
+    version: "22.04"
+    debug_url: "http://ddebs.ubuntu.com/pool/main/l/linux/linux-image-unsigned-5.15.0-176-generic-dbgsym_5.15.0-176.186_amd64.ddeb"
+    status: pending
+  - kernel: "5.15.0-174-generic"
+    version: "22.04"
+    debug_url: "http://ddebs.ubuntu.com/pool/main/l/linux/linux-image-unsigned-5.15.0-174-generic-dbgsym_5.15.0-174.184_amd64.ddeb"
+    status: pending
+  - kernel: "5.15.0-173-generic"
+    version: "22.04"
+    debug_url: "http://ddebs.ubuntu.com/pool/main/l/linux/linux-image-unsigned-5.15.0-173-generic-dbgsym_5.15.0-173.183_amd64.ddeb"
+    status: pending
+  - kernel: "5.15.0-172-generic"
+    version: "22.04"
+    debug_url: "http://ddebs.ubuntu.com/pool/main/l/linux/linux-image-unsigned-5.15.0-172-generic-dbgsym_5.15.0-172.182_amd64.ddeb"
+    status: pending
+  - kernel: "5.15.0-171-generic"
+    version: "22.04"
+    debug_url: "http://ddebs.ubuntu.com/pool/main/l/linux/linux-image-unsigned-5.15.0-171-generic-dbgsym_5.15.0-171.181_amd64.ddeb"
+    status: pending
+  - kernel: "5.15.0-170-generic"
+    version: "22.04"
+    debug_url: "http://ddebs.ubuntu.com/pool/main/l/linux/linux-image-unsigned-5.15.0-170-generic-dbgsym_5.15.0-170.180_amd64.ddeb"
+    status: pending
+  - kernel: "5.15.0-169-generic"
+    version: "22.04"
+    debug_url: "http://ddebs.ubuntu.com/pool/main/l/linux/linux-image-unsigned-5.15.0-169-generic-dbgsym_5.15.0-169.179_amd64.ddeb"
+    status: pending
+  - kernel: "5.15.0-168-generic"
+    version: "22.04"
+    debug_url: "http://ddebs.ubuntu.com/pool/main/l/linux/linux-image-unsigned-5.15.0-168-generic-dbgsym_5.15.0-168.178_amd64.ddeb"
+    status: pending
+  - kernel: "5.15.0-167-generic"
+    version: "22.04"
+    debug_url: "http://ddebs.ubuntu.com/pool/main/l/linux/linux-image-unsigned-5.15.0-167-generic-dbgsym_5.15.0-167.177_amd64.ddeb"
+    status: pending
+  - kernel: "5.15.0-166-generic"
+    version: "22.04"
+    debug_url: "http://ddebs.ubuntu.com/pool/main/l/linux/linux-image-unsigned-5.15.0-166-generic-dbgsym_5.15.0-166.176_amd64.ddeb"
+    status: pending
+
+  # ── Ubuntu 20.04 LTS (Focal) — kernel 5.4.0 ──
+  - kernel: "5.4.0-218-generic"
+    version: "20.04"
+    debug_url: "http://ddebs.ubuntu.com/pool/main/l/linux/linux-image-unsigned-5.4.0-218-generic-dbgsym_5.4.0-218.238_amd64.ddeb"
+    status: pending
+  - kernel: "5.4.0-216-generic"
+    version: "20.04"
+    debug_url: "http://ddebs.ubuntu.com/pool/main/l/linux/linux-image-unsigned-5.4.0-216-generic-dbgsym_5.4.0-216.236_amd64.ddeb"
+    status: pending
+  - kernel: "5.4.0-215-generic"
+    version: "20.04"
+    debug_url: "http://ddebs.ubuntu.com/pool/main/l/linux/linux-image-unsigned-5.4.0-215-generic-dbgsym_5.4.0-215.235_amd64.ddeb"
+    status: pending
+  - kernel: "5.4.0-214-generic"
+    version: "20.04"
+    debug_url: "http://ddebs.ubuntu.com/pool/main/l/linux/linux-image-unsigned-5.4.0-214-generic-dbgsym_5.4.0-214.234_amd64.ddeb"
+    status: pending
+  - kernel: "5.4.0-212-generic"
+    version: "20.04"
+    debug_url: "http://ddebs.ubuntu.com/pool/main/l/linux/linux-image-unsigned-5.4.0-212-generic-dbgsym_5.4.0-212.232_amd64.ddeb"
+    status: pending

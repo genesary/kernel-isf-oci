@@ -1,0 +1,14 @@
+# AlmaLinux kernel ISF symbols
+#
+# Fields:
+#   kernel:    uname -r output (used as image tag)
+#   version:   AlmaLinux release version
+#   debug_url: URL to the kernel-debuginfo RPM
+#   status:    pending | building | built | failed
+#
+# AlmaLinux shares the same .el9 kernel base as RHEL/CentOS/Rocky.
+# Debug packages are in the vault: https://repo.almalinux.org/vault/
+# Community contributions welcome — submit a PR with verified debug_url.
+
+distro: almalinux
+symbols: []

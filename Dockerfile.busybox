@@ -1,0 +1,36 @@
+# Busybox-based image for use as a Kubernetes init container.
+#
+# Copies ISF symbols to a destination directory (default: /dest/symbols/linux).
+# Mount a shared emptyDir volume at /dest/symbols and the main container
+# will have the ISF files available.
+#
+# Build args:
+#   SYMBOL_ID  - Identifier matching the builder output
+#
+# Usage in a Pod spec:
+#   initContainers:
+#     - name: isf-symbols
+#       image: ghcr.io/<org>/kernel-isf:<id>-busybox
+#       volumeMounts:
+#         - name: symbols
+#           mountPath: /dest/symbols
+#   containers:
+#     - name: forensics
+#       volumeMounts:
+#         - name: symbols
+#           mountPath: /usr/local/lib/python3.12/site-packages/volatility3/symbols
+
+ARG SYMBOL_ID
+
+FROM busybox:stable
+ARG SYMBOL_ID
+
+COPY --from=builder /output/${SYMBOL_ID}.json /symbols/linux/${SYMBOL_ID}.json
+COPY scripts/vol-qemu /usr/local/bin/vol-qemu
+COPY scripts/qemu_elf.py /usr/local/bin/qemu_elf.py
+
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh /usr/local/bin/vol-qemu
+
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["/dest/symbols"]

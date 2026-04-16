@@ -1,0 +1,10 @@
+# Minimal OCI image containing vol-qemu and qemu_elf.py.
+#
+# Works as:
+#   - Kubernetes Image Volume (K8s 1.31+): mount directly as read-only volume
+#   - oras pull: extract the tools
+#   - crane export: extract from OCI layers
+
+FROM scratch
+COPY scripts/vol-qemu /vol-qemu
+COPY scripts/qemu_elf.py /qemu_elf.py

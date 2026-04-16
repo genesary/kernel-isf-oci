@@ -1,0 +1,529 @@
+#!/usr/bin/env python3
+"""vol-qemu — Run any Volatility3 plugin on KubeVirt QEMU ELF memory dumps.
+
+Vol3's automagic pipeline can't fully handle QEMU ELF core dumps from
+KubeVirt's memory-dump API:
+  - QemuStacker only handles QEVM savevm format, not QEMU ELF
+  - SymbolFinder clips 64-bit kernel addresses via Elf64Layer's address mask
+  - set_type_class("module_sect_attr") breaks on kernel ≥ 6.18
+
+This wrapper:
+  1. Extracts CR3 from QEMU CPU-state notes
+  2. Scans VMCOREINFO for KASLR offset
+  3. Builds the layer stack manually (File → Elf64 → LinuxIntel32e)
+  4. Loads ISF and creates the kernel module with correct addressing
+  5. Runs ANY native vol3 plugin through the standard framework
+
+Usage:
+  vol-qemu -f /dump/*.memory.dump linux.pslist.PsList
+  vol-qemu -f /dump/*.memory.dump linux.lsmod.Lsmod
+  vol-qemu -f /dump/*.memory.dump linux.malfind.Malfind
+  vol-qemu -f /dump/*.memory.dump --info
+"""
+
+import argparse
+import glob as globmod
+import os
+import struct
+import sys
+import textwrap
+
+
+# ── ELF / QEMU note parsing ──────────────────────────────────────────────
+
+def find_note_segment(f):
+    """Return (offset, size) of the PT_NOTE segment."""
+    f.seek(0)
+    hdr = f.read(64)
+    if hdr[:4] != b"\x7fELF":
+        raise SystemExit("Not an ELF file")
+    e_phoff = struct.unpack_from("<Q", hdr, 32)[0]
+    e_phentsize = struct.unpack_from("<H", hdr, 54)[0]
+    e_phnum = struct.unpack_from("<H", hdr, 56)[0]
+
+    f.seek(e_phoff)
+    for _ in range(e_phnum):
+        ph = f.read(e_phentsize)
+        if struct.unpack_from("<I", ph, 0)[0] == 4:  # PT_NOTE
+            return (
+                struct.unpack_from("<Q", ph, 8)[0],
+                struct.unpack_from("<Q", ph, 32)[0],
+            )
+    raise SystemExit("No PT_NOTE segment — not a QEMU core dump?")
+
+
+def extract_cr3(f):
+    """Extract CR3 from the first QEMU CPU-state note.
+
+    QEMUCPUState x86_64 layout:
+        version(4) + size(4) + 18 regs(144) + 10 segments(240) + cr[0..4](40)
+    CR3 is the 4th CR (index 3): offset = 8 + 144 + 240 + 3*8 = 416
+    """
+    note_off, note_sz = find_note_segment(f)
+    pos = note_off
+    end = note_off + note_sz
+    f.seek(pos)
+    while pos < end:
+        if end - pos < 12:
+            break
+        namesz, descsz, ntype = struct.unpack("<III", f.read(12))
+        name = f.read(namesz).rstrip(b"\x00").decode("ascii", errors="replace")
+        f.seek((f.tell() + 3) & ~3)
+        desc = f.read(descsz) if descsz else b""
+        f.seek((f.tell() + 3) & ~3)
+        pos = f.tell()
+
+        if name == "QEMU" and descsz >= 440:
+            cr3_offset = 8 + 144 + 240 + 3 * 8
+            cr3 = struct.unpack_from("<Q", desc, cr3_offset)[0]
+            return cr3
+
+    raise SystemExit("No QEMU CPU-state note found — is this a KubeVirt dump?")
+
+
+def scan_vmcoreinfo(f):
+    """Scan for VMCOREINFO containing KERNELOFFSET."""
+    # Check ELF notes first
+    note_off, note_sz = find_note_segment(f)
+    pos = note_off
+    end = note_off + note_sz
+    f.seek(pos)
+    while pos < end:
+        if end - pos < 12:
+            break
+        namesz, descsz, ntype = struct.unpack("<III", f.read(12))
+        name = f.read(namesz).rstrip(b"\x00").decode("ascii", errors="replace")
+        f.seek((f.tell() + 3) & ~3)
+        desc = f.read(descsz) if descsz else b""
+        f.seek((f.tell() + 3) & ~3)
+        pos = f.tell()
+        if name == "VMCOREINFO":
+            return desc.decode("ascii", errors="replace")
+
+    # Scan raw memory for KERNELOFFSET= with real hex value (not format strings)
+    needle = b"KERNELOFFSET="
+    hex_digits = set(b"0123456789abcdef")
+    f.seek(0)
+    chunk_size = 16 * 1024 * 1024
+    overlap = 4096
+    prev_tail = b""
+    while True:
+        chunk = f.read(chunk_size)
+        if not chunk:
+            break
+        buf = prev_tail + chunk
+        search_from = 0
+        while True:
+            idx = buf.find(needle, search_from)
+            if idx < 0:
+                break
+            val_start = idx + len(needle)
+            if val_start < len(buf) and buf[val_start:val_start + 1][0] in hex_digits:
+                abs_pos = f.tell() - len(buf) + idx
+                start = max(0, abs_pos - 4096)
+                f.seek(start)
+                blob = f.read(16384)
+                block_start = blob.rfind(b"OSRELEASE=", 0, abs_pos - start + 64)
+                if block_start < 0:
+                    block_start = max(0, abs_pos - start - 4096)
+                block_end = blob.find(b"\x00", abs_pos - start)
+                if block_end < 0:
+                    block_end = len(blob)
+                return blob[block_start:block_end].decode("ascii", errors="replace")
+            search_from = idx + 1
+        prev_tail = buf[-overlap:]
+    return None
+
+
+def extract_kaslr(f):
+    """Get KASLR offset and kernel version from VMCOREINFO."""
+    info = scan_vmcoreinfo(f)
+    if not info:
+        return 0, None
+    kaslr = 0
+    kernel = None
+    for line in info.split("\n"):
+        if line.startswith("KERNELOFFSET="):
+            kaslr = int(line.split("=")[1].strip(), 16)
+        elif line.startswith("OSRELEASE="):
+            kernel = line.split("=", 1)[1].strip()
+    return kaslr, kernel
+
+
+# ── Vol3 integration ─────────────────────────────────────────────────────
+
+def build_context(dump_path, cr3, kaslr, isf_dir):
+    """Build a vol3 context with manual layer stack + ISF + kernel module.
+
+    Returns (context, kernel_module_name, plugin_config_path) ready for
+    any vol3 plugin that takes a kernel ModuleRequirement.
+    """
+    from volatility3 import framework
+    from volatility3.framework import contexts, interfaces, constants
+    from volatility3.framework.layers import physical, elf, intel
+    from volatility3.framework.symbols import intermed
+    from volatility3.framework.symbols.linux import LinuxKernelIntermedSymbols
+    import volatility3.plugins
+    import volatility3.symbols
+
+    framework.require_interface_version(2, 0, 0)
+    framework.import_files(volatility3.plugins)
+    framework.import_files(volatility3.symbols)
+
+    join = interfaces.configuration.path_join
+    ctx = contexts.Context()
+
+    # ── Layer 1: FileLayer ──
+    file_config = "manual_file"
+    ctx.config[join(file_config, "location")] = "file://" + os.path.abspath(dump_path)
+    file_layer = physical.FileLayer(ctx, file_config, "FileLayer")
+    ctx.add_layer(file_layer)
+
+    # ── Layer 2: Elf64Layer ──
+    elf_config = "manual_elf"
+    ctx.config[join(elf_config, "base_layer")] = "FileLayer"
+    elf_layer = elf.Elf64Layer(ctx, elf_config, "Elf64Layer")
+    ctx.add_layer(elf_layer)
+
+    # ── Layer 3: LinuxIntel32e ──
+    intel_config = "manual_intel"
+    ctx.config[join(intel_config, "memory_layer")] = "Elf64Layer"
+    ctx.config[join(intel_config, "page_map_offset")] = cr3
+    intel_layer = intel.LinuxIntel32e(
+        ctx, intel_config, "IntelLayer", metadata={"os": "Linux"}
+    )
+    ctx.add_layer(intel_layer)
+
+    # ── Load ISF ──
+    isf_files = sorted(
+        [os.path.join(isf_dir, f) for f in os.listdir(isf_dir) if f.endswith(".json")]
+    ) if os.path.isdir(isf_dir) else []
+    if not isf_files:
+        raise SystemExit(f"No ISF files in {isf_dir}. Mount an ISF init container.")
+
+    isf_path = isf_files[0]
+    isf_url = "file://" + isf_path
+    basename = os.path.splitext(os.path.basename(isf_path))[0]
+
+    # Create ISF table as LinuxKernelIntermedSymbols (registers type extensions
+    # like list_head.to_list, task_struct helpers, etc.)
+    # Patch first to handle missing types in newer kernels (e.g. module_sect_attr)
+    _patch_linux_symbols()
+
+    table_name = ctx.symbol_space.free_table_name("kernel")
+    isf_url = "file://" + isf_path
+    table_config = join("isf_config", table_name)
+    ctx.config[join(table_config, "isf_url")] = isf_url
+    ctx.config[join(table_config, "symbol_mask")] = 0  # no masking — full 64-bit addrs
+    table = LinuxKernelIntermedSymbols(
+        ctx, table_config, name=table_name, isf_url=isf_url
+    )
+    ctx.symbol_space.append(table)
+
+    # ── Create kernel Module ──
+    kernel_module = contexts.Module.create(
+        ctx,
+        module_name="kernel",
+        layer_name="IntelLayer",
+        offset=kaslr,
+        symbol_table_name=table_name,
+    )
+
+    return ctx, kernel_module.name
+
+
+_patched = False
+
+def _patch_linux_symbols():
+    """Patch LinuxKernelIntermedSymbols to use optional_set_type_class for
+    types that may not exist in newer kernels (e.g. module_sect_attr in 6.18+)."""
+    global _patched
+    if _patched:
+        return
+    _patched = True
+
+    from volatility3.framework.symbols.linux import LinuxKernelIntermedSymbols
+
+    _orig_init = LinuxKernelIntermedSymbols.__init__
+
+    def _patched_init(self, *args, **kwargs):
+        try:
+            _orig_init(self, *args, **kwargs)
+        except ValueError as e:
+            if "module_sect_attr" in str(e):
+                # Retry with module_sect_attr as optional
+                # First call super().__init__ to get the base state
+                from volatility3.framework.symbols.intermed import (
+                    IntermediateSymbolTable,
+                )
+                IntermediateSymbolTable.__init__(self, *args, **kwargs)
+                # Re-apply all set_type_class calls but make module_sect_attr optional
+                from volatility3.framework.symbols.linux import extensions
+                for type_name, ext_class in [
+                    ("file", extensions.struct_file),
+                    ("list_head", extensions.list_head),
+                    ("hlist_head", extensions.hlist_head),
+                    ("mm_struct", extensions.mm_struct),
+                    ("super_block", extensions.super_block),
+                    ("task_struct", extensions.task_struct),
+                    ("vm_area_struct", extensions.vm_area_struct),
+                    ("qstr", extensions.qstr),
+                    ("dentry", extensions.dentry),
+                    ("fs_struct", extensions.fs_struct),
+                    ("files_struct", extensions.files_struct),
+                    ("kobject", extensions.kobject),
+                    ("cred", extensions.cred),
+                    ("inode", extensions.inode),
+                    ("idr", extensions.IDR),
+                    ("address_space", extensions.address_space),
+                    ("page", extensions.page),
+                    ("vfsmount", extensions.vfsmount),
+                    ("net", extensions.network.net),
+                    ("socket", extensions.network.socket),
+                    ("sock", extensions.network.sock),
+                    ("inet_sock", extensions.network.inet_sock),
+                    ("unix_sock", extensions.network.unix_sock),
+                ]:
+                    try:
+                        self.set_type_class(type_name, ext_class)
+                    except ValueError:
+                        pass
+                # All optional types
+                for type_name, ext_class in [
+                    ("module_sect_attr", extensions.module_sect_attr),
+                    ("module", extensions.module),
+                    ("bpf_prog", extensions.bpf_prog),
+                    ("bpf_prog_aux", extensions.bpf_prog_aux),
+                    ("kernel_cap_struct", extensions.kernel_cap_struct),
+                    ("kernel_cap_t", extensions.kernel_cap_t),
+                    ("scatterlist", extensions.scatterlist),
+                    ("timespec64", extensions.timespec64),
+                    ("timespec", extensions.timespec64),
+                    ("mount", extensions.mount),
+                    ("mnt_namespace", extensions.mnt_namespace),
+                    ("rb_root", extensions.rb_root),
+                    ("netlink_sock", extensions.network.netlink_sock),
+                    ("vsock_sock", extensions.network.vsock_sock),
+                    ("packet_sock", extensions.network.packet_sock),
+                    ("bt_sock", extensions.network.bt_sock),
+                    ("xdp_sock", extensions.network.xdp_sock),
+                    ("maple_tree", extensions.maple_tree),
+                    ("latch_tree_root", extensions.latch_tree_root),
+                    ("kernel_symbol", extensions.kernel_symbol),
+                ]:
+                    self.optional_set_type_class(type_name, ext_class)
+            else:
+                raise
+
+    LinuxKernelIntermedSymbols.__init__ = _patched_init
+
+
+def run_plugin(ctx, kernel_module_name, plugin_class, extra_args=None):
+    """Run a vol3 plugin using our pre-built context."""
+    from volatility3.framework import interfaces, constants, renderers
+    from volatility3.cli.text_renderer import QuickTextRenderer
+
+    join = interfaces.configuration.path_join
+    base = "run"
+    plugin_path = join(base, plugin_class.__name__)
+
+    # Wire the kernel module requirement
+    ctx.config[join(plugin_path, "kernel")] = kernel_module_name
+    ctx.config[join(plugin_path, "kernel", "class")] = (
+        "volatility3.framework.contexts.Module"
+    )
+
+    # Apply extra args
+    if extra_args:
+        for key, val in extra_args.items():
+            ctx.config[join(plugin_path, key)] = val
+
+    # Construct and run
+    try:
+        constructed = plugin_class(ctx, plugin_path, progress_callback=lambda f, s: None)
+    except Exception as e:
+        print(f"[!] Plugin construction failed: {e}", file=sys.stderr)
+        raise
+
+    grid = constructed.run()
+
+    # Render output
+    renderer = QuickTextRenderer()
+    renderer.render(grid)
+
+
+# ── CLI ──────────────────────────────────────────────────────────────────
+
+def list_plugins():
+    """List useful Linux forensic plugins."""
+    plugins = [
+        ("linux.pslist.PsList", "List running processes"),
+        ("linux.pstree.PsTree", "Process tree"),
+        ("linux.psaux.PsAux", "Processes with command lines"),
+        ("linux.bash.Bash", "Bash history from memory"),
+        ("linux.lsof.Lsof", "Open files"),
+        ("linux.sockstat.Sockstat", "Network connections"),
+        ("linux.lsmod.Lsmod", "Loaded kernel modules"),
+        ("linux.kmsg.Kmsg", "Kernel log buffer"),
+        ("linux.mountinfo.MountInfo", "Mount points"),
+        ("linux.envars.Envars", "Process environment variables"),
+        ("linux.malfind.Malfind", "Suspicious memory regions"),
+        ("linux.check_syscall.Check_syscall", "Hooked syscalls"),
+        ("linux.hidden_modules.Hidden_modules", "Hidden kernel modules"),
+        ("linux.check_modules.Check_modules", "Module integrity"),
+        ("linux.capabilities.Capabilities", "Process capabilities"),
+        ("linux.boottime.Boottime", "System boot time"),
+        ("linux.iomem.IOMem", "IO memory map"),
+        ("linux.vmcoreinfo.VMCoreInfo", "VMCOREINFO data"),
+        ("banners.Banners", "Kernel banner strings"),
+    ]
+    print("Available plugins (all native vol3 plugins work):\n")
+    for name, desc in plugins:
+        print(f"  {name:<45s} {desc}")
+    print(f"\nUsage: vol-qemu -f <dump> <plugin> [plugin-args...]")
+    print(f"\nAny vol3 linux plugin works — the above are common forensic ones.")
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Volatility3 for KubeVirt QEMU ELF memory dumps",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=textwrap.dedent("""\
+            This wrapper builds the correct layer stack for QEMU ELF core dumps
+            and then runs ANY native vol3 plugin through the standard framework.
+
+            examples:
+              vol-qemu -f /dump/*.memory.dump linux.pslist.PsList
+              vol-qemu -f /dump/*.memory.dump linux.lsmod.Lsmod
+              vol-qemu -f /dump/*.memory.dump linux.kmsg.Kmsg
+              vol-qemu -f /dump/*.memory.dump linux.malfind.Malfind
+              vol-qemu -f /dump/*.memory.dump --info
+        """),
+    )
+    parser.add_argument("-f", "--file", help="Memory dump file")
+    parser.add_argument(
+        "-s", "--symbols-dir",
+        default="/usr/local/lib/python3.12/site-packages/volatility3/symbols/linux",
+        help="Directory containing ISF JSON files",
+    )
+    parser.add_argument("-v", "--verbose", action="store_true", help="Verbose output")
+    parser.add_argument("--info", action="store_true", help="Show dump info and exit")
+    parser.add_argument("--list", action="store_true", help="List common plugins")
+    parser.add_argument("plugin", nargs="?", help="Volatility3 plugin to run")
+    parser.add_argument(
+        "plugin_args", nargs=argparse.REMAINDER, help="Extra plugin arguments",
+    )
+
+    args = parser.parse_args()
+
+    if args.list:
+        list_plugins()
+        return
+
+    if not args.file:
+        if not args.info:
+            parser.print_help()
+        return
+
+    # Resolve file (handle globs)
+    dump = os.path.expanduser(args.file)
+    if not os.path.isfile(dump):
+        matches = globmod.glob(args.file)
+        if matches:
+            dump = matches[0]
+        else:
+            raise SystemExit(f"File not found: {args.file}")
+
+    # Pre-scan: extract CR3 + KASLR
+    with open(dump, "rb") as f:
+        cr3 = extract_cr3(f)
+        kaslr, kernel_version = extract_kaslr(f)
+
+    print(f"[*] Dump: {dump}", file=sys.stderr)
+    print(f"[*] CR3 (DTB): {cr3:#x}", file=sys.stderr)
+    print(f"[*] KASLR offset: {kaslr:#x}", file=sys.stderr)
+    if kernel_version:
+        print(f"[*] Kernel: {kernel_version}", file=sys.stderr)
+
+    if args.info:
+        print(f"\n  File:   {dump}")
+        print(f"  Size:   {os.path.getsize(dump) / (1024**3):.1f} GiB")
+        print(f"  CR3:    {cr3:#x}")
+        print(f"  KASLR:  {kaslr:#x}")
+        if kernel_version:
+            print(f"  Kernel: {kernel_version}")
+        isf_dir = args.symbols_dir
+        if os.path.isdir(isf_dir):
+            isfs = [f for f in os.listdir(isf_dir) if f.endswith(".json")]
+            if isfs:
+                print(f"\n  ISF symbols ({len(isfs)}):")
+                for isf in sorted(isfs):
+                    sz = os.path.getsize(os.path.join(isf_dir, isf))
+                    print(f"    {isf} ({sz / (1024**2):.0f} MiB)")
+            else:
+                print("\n  No ISF symbols found. Mount an ISF init container.")
+        return
+
+    if not args.plugin:
+        parser.print_help()
+        return
+
+    if args.verbose:
+        import logging
+        logging.basicConfig(level=logging.DEBUG)
+
+    # Build context with manual layer stack
+    print(f"[*] Building layer stack: FileLayer → Elf64Layer → LinuxIntel32e", file=sys.stderr)
+    ctx, kernel_module_name = build_context(dump, cr3, kaslr, args.symbols_dir)
+    print(f"[*] Layer stack ready, kernel module: {kernel_module_name}", file=sys.stderr)
+
+    # Find the plugin class
+    from volatility3 import framework
+    plugin_list = framework.list_plugins()
+
+    plugin_name = args.plugin
+    if plugin_name not in plugin_list:
+        # Try case-insensitive match
+        for name in plugin_list:
+            if name.lower() == plugin_name.lower():
+                plugin_name = name
+                break
+        else:
+            # Try partial match
+            matches = [n for n in plugin_list if plugin_name.lower() in n.lower()]
+            if len(matches) == 1:
+                plugin_name = matches[0]
+            elif matches:
+                print(f"[!] Ambiguous plugin '{args.plugin}'. Matches:", file=sys.stderr)
+                for m in sorted(matches):
+                    print(f"    {m}", file=sys.stderr)
+                sys.exit(1)
+            else:
+                print(f"[!] Plugin '{args.plugin}' not found.", file=sys.stderr)
+                print(f"    Use --list to see common plugins.", file=sys.stderr)
+                sys.exit(1)
+
+    plugin_class = plugin_list[plugin_name]
+
+    # Parse extra plugin args (--pid 123 → {"pid": [123]})
+    extra = {}
+    i = 0
+    while i < len(args.plugin_args):
+        arg = args.plugin_args[i]
+        if arg.startswith("--"):
+            key = arg[2:].replace("-", "_")
+            if i + 1 < len(args.plugin_args) and not args.plugin_args[i + 1].startswith("--"):
+                extra[key] = args.plugin_args[i + 1]
+                i += 2
+            else:
+                extra[key] = True
+                i += 1
+        else:
+            i += 1
+
+    print(f"[*] Running: {plugin_name}", file=sys.stderr)
+    run_plugin(ctx, kernel_module_name, plugin_class, extra)
+
+
+if __name__ == "__main__":
+    main()

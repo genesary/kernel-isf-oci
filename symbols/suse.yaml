@@ -1,0 +1,73 @@
+# SUSE / openSUSE kernel ISF symbols
+#
+# Fields:
+#   kernel:    uname -r output (used as image tag)
+#   version:   SUSE/openSUSE release version
+#   debug_url: URL to the kernel-default-debuginfo RPM
+#   status:    pending | building | built | failed
+
+distro: suse
+symbols:
+  # ── openSUSE Leap 15.6 — kernel 6.4.0 ──
+  - kernel: "6.4.0-150600.23.92-default"
+    version: "15.6"
+    debug_url: "https://ftp.gwdg.de/pub/opensuse/debug/update/leap/15.6/sle/x86_64/kernel-default-debuginfo-6.4.0-150600.23.92.1.x86_64.rpm"
+    status: pending
+  - kernel: "6.4.0-150600.23.78-default"
+    version: "15.6"
+    debug_url: "https://ftp.gwdg.de/pub/opensuse/debug/update/leap/15.6/sle/x86_64/kernel-default-debuginfo-6.4.0-150600.23.78.1.x86_64.rpm"
+    status: pending
+  - kernel: "6.4.0-150600.23.60-default"
+    version: "15.6"
+    debug_url: "https://ftp.gwdg.de/pub/opensuse/debug/update/leap/15.6/sle/x86_64/kernel-default-debuginfo-6.4.0-150600.23.60.5.x86_64.rpm"
+    status: pending
+  - kernel: "6.4.0-150600.23.53-default"
+    version: "15.6"
+    debug_url: "https://ftp.gwdg.de/pub/opensuse/debug/update/leap/15.6/sle/x86_64/kernel-default-debuginfo-6.4.0-150600.23.53.1.x86_64.rpm"
+    status: pending
+  - kernel: "6.4.0-150600.23.42-default"
+    version: "15.6"
+    debug_url: "https://ftp.gwdg.de/pub/opensuse/debug/update/leap/15.6/sle/x86_64/kernel-default-debuginfo-6.4.0-150600.23.42.1.x86_64.rpm"
+    status: pending
+  - kernel: "6.4.0-150600.23.38-default"
+    version: "15.6"
+    debug_url: "https://ftp.gwdg.de/pub/opensuse/debug/update/leap/15.6/sle/x86_64/kernel-default-debuginfo-6.4.0-150600.23.38.1.x86_64.rpm"
+    status: pending
+  - kernel: "6.4.0-150600.23.30-default"
+    version: "15.6"
+    debug_url: "https://ftp.gwdg.de/pub/opensuse/debug/update/leap/15.6/sle/x86_64/kernel-default-debuginfo-6.4.0-150600.23.30.1.x86_64.rpm"
+    status: pending
+  - kernel: "6.4.0-150600.23.25-default"
+    version: "15.6"
+    debug_url: "https://ftp.gwdg.de/pub/opensuse/debug/update/leap/15.6/sle/x86_64/kernel-default-debuginfo-6.4.0-150600.23.25.1.x86_64.rpm"
+    status: pending
+  - kernel: "6.4.0-150600.23.17-default"
+    version: "15.6"
+    debug_url: "https://ftp.gwdg.de/pub/opensuse/debug/update/leap/15.6/sle/x86_64/kernel-default-debuginfo-6.4.0-150600.23.17.1.x86_64.rpm"
+    status: pending
+  - kernel: "6.4.0-150600.23.7-default"
+    version: "15.6"
+    debug_url: "https://ftp.gwdg.de/pub/opensuse/debug/update/leap/15.6/sle/x86_64/kernel-default-debuginfo-6.4.0-150600.23.7.1.x86_64.rpm"
+    status: pending
+
+  # ── openSUSE Leap 15.5 (EOL Dec 2024) — kernel 5.14.21 ──
+  - kernel: "5.14.21-150500.55.127-default"
+    version: "15.5"
+    debug_url: "https://ftp.gwdg.de/pub/opensuse/debug/update/leap/15.5/sle/x86_64/kernel-default-debuginfo-5.14.21-150500.55.127.1.x86_64.rpm"
+    status: pending
+  - kernel: "5.14.21-150500.55.120-default"
+    version: "15.5"
+    debug_url: "https://ftp.gwdg.de/pub/opensuse/debug/update/leap/15.5/sle/x86_64/kernel-default-debuginfo-5.14.21-150500.55.120.1.x86_64.rpm"
+    status: pending
+  - kernel: "5.14.21-150500.55.113-default"
+    version: "15.5"
+    debug_url: "https://ftp.gwdg.de/pub/opensuse/debug/update/leap/15.5/sle/x86_64/kernel-default-debuginfo-5.14.21-150500.55.113.1.x86_64.rpm"
+    status: pending
+  - kernel: "5.14.21-150500.55.106-default"
+    version: "15.5"
+    debug_url: "https://ftp.gwdg.de/pub/opensuse/debug/update/leap/15.5/sle/x86_64/kernel-default-debuginfo-5.14.21-150500.55.106.1.x86_64.rpm"
+    status: pending
+  - kernel: "5.14.21-150500.55.99-default"
+    version: "15.5"
+    debug_url: "https://ftp.gwdg.de/pub/opensuse/debug/update/leap/15.5/sle/x86_64/kernel-default-debuginfo-5.14.21-150500.55.99.1.x86_64.rpm"
+    status: pending

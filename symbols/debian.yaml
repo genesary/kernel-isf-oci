@@ -1,0 +1,76 @@
+# Debian kernel ISF symbols
+#
+# Fields:
+#   kernel:    uname -r output (used as image tag)
+#   version:   Debian release version
+#   debug_url: URL to the linux-image-*-dbg .deb package
+#   status:    pending | building | built | failed
+#
+# Debug packages are under:
+#   https://security.debian.org/debian-security/pool/updates/main/l/linux/
+
+distro: debian
+symbols:
+  # ── Debian 12 (Bookworm) — kernel 6.1.x ──
+  - kernel: "6.1.0-44-amd64"
+    version: "12"
+    debug_url: "https://security.debian.org/debian-security/pool/updates/main/l/linux/linux-image-6.1.0-44-amd64-dbg_6.1.164-1_amd64.deb"
+    status: pending
+  - kernel: "6.1.0-43-amd64"
+    version: "12"
+    debug_url: "https://security.debian.org/debian-security/pool/updates/main/l/linux/linux-image-6.1.0-43-amd64-dbg_6.1.150-1_amd64.deb"
+    status: pending
+  - kernel: "6.1.0-36-amd64"
+    version: "12"
+    debug_url: "https://security.debian.org/debian-security/pool/updates/main/l/linux/linux-image-6.1.0-36-amd64-dbg_6.1.119-1_amd64.deb"
+    status: pending
+  - kernel: "6.1.0-35-amd64"
+    version: "12"
+    debug_url: "https://security.debian.org/debian-security/pool/updates/main/l/linux/linux-image-6.1.0-35-amd64-dbg_6.1.115-1_amd64.deb"
+    status: pending
+  - kernel: "6.1.0-34-amd64"
+    version: "12"
+    debug_url: "https://security.debian.org/debian-security/pool/updates/main/l/linux/linux-image-6.1.0-34-amd64-dbg_6.1.106-3_amd64.deb"
+    status: pending
+  - kernel: "6.1.0-33-amd64"
+    version: "12"
+    debug_url: "https://security.debian.org/debian-security/pool/updates/main/l/linux/linux-image-6.1.0-33-amd64-dbg_6.1.99-1_amd64.deb"
+    status: pending
+  - kernel: "6.1.0-32-amd64"
+    version: "12"
+    debug_url: "https://security.debian.org/debian-security/pool/updates/main/l/linux/linux-image-6.1.0-32-amd64-dbg_6.1.94-1_amd64.deb"
+    status: pending
+  - kernel: "6.1.0-31-amd64"
+    version: "12"
+    debug_url: "https://security.debian.org/debian-security/pool/updates/main/l/linux/linux-image-6.1.0-31-amd64-dbg_6.1.90-1_amd64.deb"
+    status: pending
+  - kernel: "6.1.0-30-amd64"
+    version: "12"
+    debug_url: "https://security.debian.org/debian-security/pool/updates/main/l/linux/linux-image-6.1.0-30-amd64-dbg_6.1.85-1_amd64.deb"
+    status: pending
+  - kernel: "6.1.0-28-amd64"
+    version: "12"
+    debug_url: "https://security.debian.org/debian-security/pool/updates/main/l/linux/linux-image-6.1.0-28-amd64-dbg_6.1.76-1_amd64.deb"
+    status: pending
+
+  # ── Debian 11 (Bullseye) — kernel 5.10.x ──
+  - kernel: "5.10.0-33-amd64"
+    version: "11"
+    debug_url: "https://security.debian.org/debian-security/pool/updates/main/l/linux/linux-image-5.10.0-33-amd64-dbg_5.10.226-1_amd64.deb"
+    status: pending
+  - kernel: "5.10.0-32-amd64"
+    version: "11"
+    debug_url: "https://security.debian.org/debian-security/pool/updates/main/l/linux/linux-image-5.10.0-32-amd64-dbg_5.10.209-2_amd64.deb"
+    status: pending
+  - kernel: "5.10.0-31-amd64"
+    version: "11"
+    debug_url: "https://security.debian.org/debian-security/pool/updates/main/l/linux/linux-image-5.10.0-31-amd64-dbg_5.10.205-2_amd64.deb"
+    status: pending
+  - kernel: "5.10.0-30-amd64"
+    version: "11"
+    debug_url: "https://security.debian.org/debian-security/pool/updates/main/l/linux/linux-image-5.10.0-30-amd64-dbg_5.10.197-1_amd64.deb"
+    status: pending
+  - kernel: "5.10.0-29-amd64"
+    version: "11"
+    debug_url: "https://security.debian.org/debian-security/pool/updates/main/l/linux/linux-image-5.10.0-29-amd64-dbg_5.10.178-3_amd64.deb"
+    status: pending
