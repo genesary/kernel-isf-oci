@@ -1,0 +1,74 @@
+# Triggered on push to main when symbols/ files change.
+# Finds all entries with status: pending and triggers a build for each.
+
+name: Build All Pending Symbols
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "symbols/*.yaml"
+
+jobs:
+  find-pending:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.pending.outputs.matrix }}
+      has_pending: ${{ steps.pending.outputs.has_pending }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Find pending symbols
+        id: pending
+        run: |
+          ENTRIES='[]'
+          for f in symbols/*.yaml; do
+            [ -f "$f" ] || continue
+            NEW=$(python3 -c "
+          import yaml, json
+          with open('$f') as fh:
+              data = yaml.safe_load(fh)
+          distro = data.get('distro', '')
+          entries = []
+          for s in data.get('symbols', []):
+              if s.get('status') == 'pending':
+                  entries.append({
+                      'kernel': s['kernel'],
+                      'distro': distro,
+                      'distro_version': str(s.get('version', '')),
+                      'debug_url': s.get('debug_url', ''),
+                  })
+          print(json.dumps(entries))
+          ")
+            ENTRIES=$(echo "$ENTRIES" "$NEW" | python3 -c "
+          import json, sys
+          parts = sys.stdin.read().strip().split('\n')
+          merged = []
+          for p in parts:
+              merged.extend(json.loads(p))
+          print(json.dumps(merged))
+          ")
+          done
+          echo "matrix={\"include\":$ENTRIES}" >> "$GITHUB_OUTPUT"
+          COUNT=$(echo "$ENTRIES" | python3 -c "import json,sys; print(len(json.loads(sys.stdin.read())))")
+          if [ "$COUNT" -gt 0 ]; then
+            echo "has_pending=true" >> "$GITHUB_OUTPUT"
+            echo "[*] Found $COUNT pending symbol(s)"
+          else
+            echo "has_pending=false" >> "$GITHUB_OUTPUT"
+            echo "[*] No pending symbols"
+          fi
+
+  build:
+    needs: find-pending
+    if: needs.find-pending.outputs.has_pending == 'true'
+    strategy:
+      matrix: ${{ fromJson(needs.find-pending.outputs.matrix) }}
+      fail-fast: false
+    uses: ./.github/workflows/build-isf.yml
+    with:
+      kernel: ${{ matrix.kernel }}
+      distro: ${{ matrix.distro }}
+      debug_url: ${{ matrix.debug_url }}
+      distro_version: ${{ matrix.distro_version }}

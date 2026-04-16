@@ -1,0 +1,137 @@
+# Triggered when an issue is labeled 'symbol-request'.
+# Parses the structured issue form, validates inputs, adds the entry to the
+# appropriate distro manifest, and triggers the build workflow.
+
+name: Process Symbol Request
+
+on:
+  issues:
+    types: [labeled]
+
+jobs:
+  process:
+    if: github.event.label.name == 'symbol-request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+
+    steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Parse issue form
+        id: parse
+        uses: stefanbuck/github-issue-parser@v3
+        with:
+          template-path: .github/ISSUE_TEMPLATE/symbol-request.yml
+
+      - name: Validate and add to manifest
+        id: manifest
+        env:
+          DISTRO: ${{ steps.parse.outputs.issueparser_distro }}
+          VERSION: ${{ steps.parse.outputs.issueparser_version }}
+          KERNEL: ${{ steps.parse.outputs.issueparser_kernel }}
+          DEBUG_URL: ${{ steps.parse.outputs.issueparser_debug_url }}
+        run: |
+          echo "kernel=$KERNEL" >> "$GITHUB_OUTPUT"
+
+          DISTRO_FILE="symbols/${DISTRO}.yaml"
+          if [ ! -f "$DISTRO_FILE" ]; then
+            echo "[-] Unknown distro: $DISTRO"
+            echo "error=Unknown distro: $DISTRO" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          # Check for duplicates (kernel = uname -r is the unique key)
+          if grep -q "kernel: \"$KERNEL\"" "$DISTRO_FILE"; then
+            echo "[-] Symbol for $KERNEL already exists"
+            echo "duplicate=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Add entry to manifest
+          python3 -c "
+          import yaml
+          f = '$DISTRO_FILE'
+          with open(f) as fh:
+              data = yaml.safe_load(fh)
+          if data.get('symbols') is None:
+              data['symbols'] = []
+          entry = {
+              'kernel': '$KERNEL',
+              'version': '$VERSION',
+              'status': 'pending',
+          }
+          debug_url = '$DEBUG_URL'
+          if debug_url:
+              entry['debug_url'] = debug_url
+          data['symbols'].append(entry)
+          with open(f, 'w') as fh:
+              yaml.dump(data, fh, default_flow_style=False, sort_keys=False)
+          "
+          echo "added=true" >> "$GITHUB_OUTPUT"
+
+      - name: Commit manifest update
+        if: steps.manifest.outputs.added == 'true'
+        run: |
+          git config user.name "kernel-isf-bot[bot]"
+          git config user.email "${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com"
+          git add symbols/
+          git commit -m "Add symbol request ${{ steps.manifest.outputs.kernel }} from #${{ github.event.issue.number }}"
+          git push
+
+      - name: Comment on issue (added)
+        if: steps.manifest.outputs.added == 'true'
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{ github.event.issue.number }}
+          body: |
+            **Symbol request accepted!**
+
+            - Kernel: `${{ steps.manifest.outputs.kernel }}`
+            - Status: `pending` — build will start shortly
+
+            Once built, pull the images with:
+            ```
+            # Minimal OCI image (ISF JSON only)
+            docker pull ghcr.io/genesary/kernel-isf-oci:${{ steps.manifest.outputs.kernel }}
+
+            # Busybox image (for Kubernetes init containers)
+            docker pull ghcr.io/genesary/kernel-isf-oci:${{ steps.manifest.outputs.kernel }}-busybox
+            ```
+
+      - name: Comment on issue (duplicate)
+        if: steps.manifest.outputs.duplicate == 'true'
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{ github.event.issue.number }}
+          body: |
+            **This symbol already exists!**
+
+            Kernel `${{ steps.manifest.outputs.kernel }}` is already in the manifest.
+
+            Pull the images with:
+            ```
+            docker pull ghcr.io/genesary/kernel-isf-oci:${{ steps.manifest.outputs.kernel }}
+            docker pull ghcr.io/genesary/kernel-isf-oci:${{ steps.manifest.outputs.kernel }}-busybox
+            ```
+
+      - name: Comment on issue (error)
+        if: steps.manifest.outputs.error != ''
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{ github.event.issue.number }}
+          body: |
+            **Error processing request:** ${{ steps.manifest.outputs.error }}
+
+            Please check your inputs and try again.

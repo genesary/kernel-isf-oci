@@ -1,0 +1,182 @@
+# Reusable workflow: Build ISF symbols and push as OCI images.
+#
+# All images are valid OCI images usable as Kubernetes Image Volumes,
+# with oras pull, crane export, or docker cp.
+#
+#   ghcr.io/genesary/kernel-isf-oci:<uname -r>          — scratch (ISF JSON only)
+#   ghcr.io/genesary/kernel-isf-oci:<uname -r>-busybox  — busybox (ISF + tools + entrypoint)
+#   ghcr.io/genesary/kernel-isf-oci:tools               — scratch (vol-qemu + qemu_elf.py)
+
+name: Build ISF
+
+on:
+  workflow_call:
+    inputs:
+      kernel:
+        description: "Kernel version (uname -r) — used as image tag"
+        required: true
+        type: string
+      distro:
+        description: "Linux distribution"
+        required: true
+        type: string
+      debug_url:
+        description: "Direct URL to the kernel debug package"
+        required: true
+        type: string
+      distro_version:
+        description: "Distribution version"
+        required: true
+        type: string
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: genesary/kernel-isf-oci
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Check if image already exists
+        id: check
+        run: |
+          TAG="${{ inputs.kernel }}"
+          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${TAG}"
+          if docker manifest inspect "$IMAGE" > /dev/null 2>&1; then
+            echo "[*] Image $IMAGE already exists — skipping build"
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Docker Buildx
+        if: steps.check.outputs.exists != 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: steps.check.outputs.exists != 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── Build ISF JSON via the builder Dockerfile ──
+      - name: Build ISF (builder stage)
+        if: steps.check.outputs.exists != 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.builder
+          build-args: |
+            DEBUG_PKG_URL=${{ inputs.debug_url }}
+            SYMBOL_ID=${{ inputs.kernel }}
+          target: generate
+          load: true
+          tags: isf-builder:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ── Extract the ISF JSON from builder ──
+      - name: Extract ISF JSON
+        if: steps.check.outputs.exists != 'true'
+        run: |
+          docker create --name extract isf-builder:latest
+          mkdir -p /tmp/isf-output
+          docker cp "extract:/output/${{ inputs.kernel }}.json" /tmp/isf-output/isf.json
+          docker rm extract
+          ls -lh /tmp/isf-output/
+
+      # ── Build and push scratch image (ISF only) ──
+      - name: Build and push scratch image
+        if: steps.check.outputs.exists != 'true'
+        run: |
+          cat > /tmp/Dockerfile.scratch <<'DOCKERFILE'
+          FROM scratch
+          COPY isf.json /symbols/linux/isf.json
+          DOCKERFILE
+          docker buildx build \
+            --platform linux/amd64 \
+            -f /tmp/Dockerfile.scratch \
+            -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.kernel }} \
+            --push \
+            /tmp/isf-output
+
+      # ── Build and push busybox image ──
+      - name: Build and push busybox image
+        if: steps.check.outputs.exists != 'true'
+        run: |
+          cat > /tmp/Dockerfile.busybox <<DOCKERFILE
+          FROM busybox:stable
+          COPY isf.json /symbols/linux/isf.json
+          COPY vol-qemu /usr/local/bin/vol-qemu
+          COPY qemu_elf.py /usr/local/bin/qemu_elf.py
+          COPY entrypoint.sh /entrypoint.sh
+          RUN chmod +x /entrypoint.sh /usr/local/bin/vol-qemu
+          ENTRYPOINT ["/entrypoint.sh"]
+          CMD ["/dest/symbols"]
+          DOCKERFILE
+          cp scripts/vol-qemu /tmp/isf-output/vol-qemu
+          cp scripts/qemu_elf.py /tmp/isf-output/qemu_elf.py
+          cp entrypoint.sh /tmp/isf-output/entrypoint.sh
+          docker buildx build \
+            --platform linux/amd64 \
+            -f /tmp/Dockerfile.busybox \
+            -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.kernel }}-busybox \
+            --push \
+            /tmp/isf-output
+
+      # ── Build and push tools image (scratch, idempotent) ──
+      - name: Build and push tools image
+        if: steps.check.outputs.exists != 'true'
+        run: |
+          docker buildx build \
+            --platform linux/amd64 \
+            -f Dockerfile.tools \
+            -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:tools \
+            --push \
+            .
+
+      # ── Update manifest status ──
+      - name: Update symbol status
+        if: steps.check.outputs.exists != 'true'
+        run: |
+          DISTRO_FILE="symbols/${{ inputs.distro }}.yaml"
+          if [ -f "$DISTRO_FILE" ]; then
+            python3 -c "
+          import yaml
+          f = '$DISTRO_FILE'
+          with open(f) as fh:
+              data = yaml.safe_load(fh)
+          for s in data.get('symbols', []):
+              if s.get('kernel') == '${{ inputs.kernel }}':
+                  s['status'] = 'built'
+          with open(f, 'w') as fh:
+              yaml.dump(data, fh, default_flow_style=False, sort_keys=False)
+          "
+          fi
+
+      - name: Commit status update
+        if: steps.check.outputs.exists != 'true'
+        run: |
+          git config user.name "kernel-isf-bot[bot]"
+          git config user.email "${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com"
+          git add symbols/
+          git diff --cached --quiet || git commit -m "Mark ${{ inputs.kernel }} as built"
+          git push || true

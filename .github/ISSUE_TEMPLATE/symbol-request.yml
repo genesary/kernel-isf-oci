@@ -1,0 +1,71 @@
+name: ISF Symbol Request
+description: Request ISF symbols for a new kernel version
+title: "[symbol-request] "
+labels: ["symbol-request"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Request ISF symbols for a kernel you need for memory forensics.
+        We'll build the symbols and publish them as container images.
+
+  - type: dropdown
+    id: distro
+    attributes:
+      label: Linux Distribution
+      options:
+        - fedora
+        - rhel
+        - centos
+        - almalinux
+        - rocky
+        - debian
+        - ubuntu
+        - suse
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Distribution Version
+      description: "e.g. 43, 9, 24.04, 12, 15.5, rolling"
+      placeholder: "43"
+    validations:
+      required: true
+
+  - type: input
+    id: kernel
+    attributes:
+      label: Kernel Version (uname -r)
+      description: "Output of `uname -r` — this becomes the image tag"
+      placeholder: "6.17.7-200.fc42.x86_64"
+    validations:
+      required: true
+
+  - type: input
+    id: debug_url
+    attributes:
+      label: Debug Package URL
+      description: |
+        Direct URL to the kernel debug package (optional).
+        If not provided, we'll try to auto-resolve it.
+
+        Common sources:
+        - Fedora: https://kojipkgs.fedoraproject.org/packages/kernel/
+        - RHEL/CentOS: https://debuginfo.centos.org/
+        - Debian: http://ddebs.debian.org/pool/main/l/linux/
+        - Ubuntu: http://ddebs.ubuntu.com/pool/main/l/linux/
+        - SUSE: https://download.opensuse.org/debug/
+        - Arch: https://archive.archlinux.org/packages/l/linux-debug/
+      placeholder: "https://kojipkgs.fedoraproject.org/packages/kernel/..."
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: "Any additional details about your use case or environment"
+    validations:
+      required: false

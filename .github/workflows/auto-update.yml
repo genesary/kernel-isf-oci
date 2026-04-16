@@ -1,0 +1,58 @@
+# Weekly check for new kernel releases on distros with scriptable APIs.
+#
+# Currently supports:
+#   - Fedora (via Koji API)
+#   - CentOS Stream (via kojihub API)
+#   - Rocky Linux (via mirror directory listing)
+#
+# Runs every Monday at 06:00 UTC. Can also be triggered manually.
+
+name: Auto-Update Symbols
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+jobs:
+  check-new-kernels:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Install dependencies
+        run: pip install pyyaml requests
+
+      - name: Check for new kernels
+        id: check
+        run: |
+          python3 scripts/auto-update.py
+          if git diff --quiet symbols/; then
+            echo "No new kernels found"
+            echo "has_updates=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "New kernels found!"
+            echo "has_updates=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit and push
+        if: steps.check.outputs.has_updates == 'true'
+        run: |
+          git config user.name "kernel-isf-bot[bot]"
+          git config user.email "${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com"
+          git add symbols/
+          git commit -m "Auto-update: add new kernel releases"
+          git push
