@@ -10,7 +10,7 @@
 name: Build ISF
 
 on:
-  workflow_call:
+  workflow_dispatch:
     inputs:
       kernel:
         description: "Kernel version (uname -r) — used as image tag"

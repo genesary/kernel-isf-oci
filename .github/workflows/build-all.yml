@@ -1,5 +1,5 @@
 # Triggered on push to main when symbols/ files change.
-# Finds all entries with status: pending and triggers a build for each.
+# Finds all entries with status: pending and dispatches a build for each.
 
 name: Build All Pending Symbols
 
@@ -11,66 +11,57 @@ on:
   workflow_dispatch:
 
 jobs:
-  find-pending:
+  find-and-build:
     runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.pending.outputs.matrix }}
-      has_pending: ${{ steps.pending.outputs.has_pending }}
+    permissions:
+      contents: write
+      packages: write
+      issues: write
+
     steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          token: ${{ steps.app-token.outputs.token }}
 
-      - name: Find pending symbols
-        id: pending
+      - name: Find pending symbols and trigger builds
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
-          ENTRIES='[]'
-          for f in symbols/*.yaml; do
-            [ -f "$f" ] || continue
-            NEW=$(python3 -c "
-          import yaml, json
-          with open('$f') as fh:
-              data = yaml.safe_load(fh)
-          distro = data.get('distro', '')
-          entries = []
-          for s in data.get('symbols', []):
-              if s.get('status') == 'pending':
-                  entries.append({
-                      'kernel': s['kernel'],
-                      'distro': distro,
-                      'distro_version': str(s.get('version', '')),
-                      'debug_url': s.get('debug_url', ''),
-                  })
-          print(json.dumps(entries))
-          ")
-            ENTRIES=$(echo "$ENTRIES" "$NEW" | python3 -c "
-          import json, sys
-          parts = sys.stdin.read().strip().split('\n')
-          merged = []
-          for p in parts:
-              merged.extend(json.loads(p))
-          print(json.dumps(merged))
-          ")
-          done
-          echo "matrix={\"include\":$ENTRIES}" >> "$GITHUB_OUTPUT"
-          COUNT=$(echo "$ENTRIES" | python3 -c "import json,sys; print(len(json.loads(sys.stdin.read())))")
-          if [ "$COUNT" -gt 0 ]; then
-            echo "has_pending=true" >> "$GITHUB_OUTPUT"
-            echo "[*] Found $COUNT pending symbol(s)"
-          else
-            echo "has_pending=false" >> "$GITHUB_OUTPUT"
-            echo "[*] No pending symbols"
-          fi
+          pip install pyyaml -q
 
-  build:
-    needs: find-pending
-    if: needs.find-pending.outputs.has_pending == 'true'
-    strategy:
-      matrix: ${{ fromJson(needs.find-pending.outputs.matrix) }}
-      fail-fast: false
-    uses: ./.github/workflows/build-isf.yml
-    with:
-      kernel: ${{ matrix.kernel }}
-      distro: ${{ matrix.distro }}
-      debug_url: ${{ matrix.debug_url }}
-      distro_version: ${{ matrix.distro_version }}
-    secrets: inherit
+          python3 -c "
+          import yaml, json, subprocess, sys
+
+          pending = []
+          for f in sorted(__import__('pathlib').Path('symbols').glob('*.yaml')):
+              with open(f) as fh:
+                  data = yaml.safe_load(fh)
+              distro = data.get('distro', '')
+              for s in data.get('symbols', []) or []:
+                  if s.get('status') == 'pending' and s.get('debug_url'):
+                      pending.append({
+                          'kernel': s['kernel'],
+                          'distro': distro,
+                          'distro_version': str(s.get('version', '')),
+                          'debug_url': s['debug_url'],
+                      })
+
+          print(f'Found {len(pending)} pending symbol(s)')
+          for p in pending:
+              print(f'  Triggering: {p[\"kernel\"]}')
+              subprocess.run([
+                  'gh', 'workflow', 'run', 'build-isf.yml',
+                  '-f', f'kernel={p[\"kernel\"]}',
+                  '-f', f'distro={p[\"distro\"]}',
+                  '-f', f'debug_url={p[\"debug_url\"]}',
+                  '-f', f'distro_version={p[\"distro_version\"]}',
+              ], check=True)
+          "
