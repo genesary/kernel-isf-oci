@@ -1,10 +1,74 @@
-# Minimal OCI image containing vol-qemu and qemu_elf.py.
+# Forensic toolbox: Volatility3 + dwarf2json + vol-qemu + mquire + extraction scripts.
 #
-# Works as:
-#   - Kubernetes Image Volume (K8s 1.31+): mount directly as read-only volume
-#   - oras pull: extract the tools
-#   - crane export: extract from OCI layers
+# Published as: ghcr.io/genesary/kernel-isf-oci:toolbox
+#
+# ISF symbols are NOT included — inject them at runtime via:
+#   - Kubernetes Image Volume (mount an ISF scratch image)
+#   - Init container (busybox image copies symbols into shared volume)
+#   - Direct mount (oras pull ISF JSON into a volume)
+#
+# Usage:
+#   vol-qemu -f /dump/vm.memory.dump linux.pslist.PsList
+#   vol -f /dump/vm.memory.dump linux.pslist
+#   mquire -f /dump/vm.memory.dump
 
-FROM scratch
-COPY scripts/vol-qemu /vol-qemu
-COPY scripts/qemu_elf.py /qemu_elf.py
+# ── Stage: Build dwarf2json ──────────────────────────────────────────────
+FROM golang:1.22-alpine AS dwarf2json-build
+
+RUN apk add --no-cache git && \
+    git clone --depth 1 https://github.com/volatilityfoundation/dwarf2json.git /src && \
+    cd /src && go build -o /dwarf2json .
+
+# ── Stage: Build mquire ──────────────────────────────────────────────────
+FROM rust:alpine AS mquire-build
+
+RUN apk add --no-cache musl-dev git && \
+    git clone --depth 1 https://github.com/trailofbits/mquire.git /src && \
+    cd /src && cargo build --release && \
+    cp target/release/mquire /mquire
+
+# ── Stage: Python dependencies ───────────────────────────────────────────
+FROM python:3.12-alpine AS python-build
+
+RUN pip install --no-cache-dir \
+    volatility3 \
+    pefile \
+    yara-python \
+    capstone \
+    pycryptodome
+
+# ── Final image ──────────────────────────────────────────────────────────
+FROM python:3.12-alpine
+
+COPY --from=python-build /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
+COPY --from=python-build /usr/local/bin/vol /usr/local/bin/vol
+COPY --from=dwarf2json-build /dwarf2json /usr/local/bin/dwarf2json
+COPY --from=mquire-build /mquire /usr/local/bin/mquire
+
+# Tools for extracting vmlinux from distro debug packages
+RUN apk add --no-cache \
+    rpm2cpio cpio \
+    binutils \
+    xz zstd gzip bzip2 \
+    bash curl wget file \
+    && rm -rf /var/cache/apk/*
+
+# vol-qemu: KubeVirt QEMU ELF dump wrapper
+COPY scripts/vol-qemu /usr/local/bin/vol-qemu
+RUN chmod +x /usr/local/bin/vol-qemu
+
+# qemu_elf.py: Vol3 stacker plugin for automatic QEMU ELF support
+COPY scripts/qemu_elf.py /usr/local/lib/python3.12/site-packages/volatility3/framework/layers/qemu_elf.py
+
+# ISF generation helpers
+COPY scripts/extract-vmlinux.sh /usr/local/bin/extract-vmlinux
+COPY scripts/generate-isf.sh /usr/local/bin/generate-isf
+RUN chmod +x /usr/local/bin/extract-vmlinux /usr/local/bin/generate-isf
+
+# Empty symbol dirs — ISF injected at runtime
+RUN mkdir -p /usr/local/lib/python3.12/site-packages/volatility3/symbols/linux \
+             /usr/local/lib/python3.12/site-packages/volatility3/symbols/windows \
+             /usr/local/lib/python3.12/site-packages/volatility3/symbols/mac
+
+WORKDIR /dump
+ENTRYPOINT ["sleep", "infinity"]

@@ -12,7 +12,7 @@ Every symbol set is published as OCI images. Tags match `uname -r` output direct
 |-----|------|----------|
 | `ghcr.io/genesary/kernel-isf-oci:<uname -r>` | scratch | ISF JSON file only |
 | `ghcr.io/genesary/kernel-isf-oci:<uname -r>-busybox` | busybox | ISF + vol-qemu + qemu_elf.py + entrypoint |
-| `ghcr.io/genesary/kernel-isf-oci:tools` | scratch | vol-qemu + qemu_elf.py |
+| `ghcr.io/genesary/kernel-isf-oci:toolbox` | alpine | Volatility3 + dwarf2json + vol-qemu + qemu_elf.py + mquire |
 
 ## Supported Distributions
 

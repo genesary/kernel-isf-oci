@@ -142,17 +142,6 @@ jobs:
             --push \
             /tmp/isf-output
 
-      # ── Build and push tools image (scratch, idempotent) ──
-      - name: Build and push tools image
-        if: steps.check.outputs.exists != 'true'
-        run: |
-          docker buildx build \
-            --platform linux/amd64 \
-            -f Dockerfile.tools \
-            -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:tools \
-            --push \
-            .
-
       # ── Update manifest status ──
       - name: Update symbol status
         if: steps.check.outputs.exists != 'true'
