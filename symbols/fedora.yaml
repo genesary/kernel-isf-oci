@@ -1,5 +1,9 @@
 distro: fedora
 symbols:
+- kernel: 6.18.10-200.fc43.x86_64
+  version: '43'
+  debug_url: https://kojipkgs.fedoraproject.org/packages/kernel/6.18.10/200.fc43/x86_64/kernel-debuginfo-6.18.10-200.fc43.x86_64.rpm
+  status: pending
 - kernel: 6.19.12-100.fc42.x86_64
   version: '42'
   debug_url: https://kojipkgs.fedoraproject.org/packages/kernel/6.19.12/100.fc42/x86_64/kernel-debuginfo-6.19.12-100.fc42.x86_64.rpm
