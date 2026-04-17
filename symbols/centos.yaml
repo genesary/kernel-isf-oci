@@ -39,7 +39,7 @@ symbols:
 - kernel: 5.14.0-690.el9.x86_64
   version: 9-stream
   debug_url: https://kojihub.stream.centos.org/kojifiles/packages/kernel/5.14.0/690.el9/x86_64/kernel-debuginfo-5.14.0-690.el9.x86_64.rpm
-  status: pending
+  status: built
 - kernel: 5.14.0-689.el9.x86_64
   version: 9-stream
   debug_url: https://kojihub.stream.centos.org/kojifiles/packages/kernel/5.14.0/689.el9/x86_64/kernel-debuginfo-5.14.0-689.el9.x86_64.rpm
