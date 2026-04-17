@@ -54,7 +54,6 @@ jobs:
           file: Dockerfile.tools
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:toolbox
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:toolbox-latest
+            ${{ env.REGISTRY }}/genesary/kernel-isf-toolbox:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
