@@ -63,18 +63,18 @@ jobs:
 
           # Add entry to manifest
           python3 -c "
-          import yaml
-          f = '$DISTRO_FILE'
+          import yaml, os
+          f = 'symbols/' + os.environ['DISTRO'] + '.yaml'
           with open(f) as fh:
               data = yaml.safe_load(fh)
           if data.get('symbols') is None:
               data['symbols'] = []
           entry = {
-              'kernel': '$KERNEL',
-              'version': '$VERSION',
+              'kernel': os.environ['KERNEL'],
+              'version': os.environ['VERSION'],
               'status': 'pending',
           }
-          debug_url = '$DEBUG_URL'
+          debug_url = os.environ.get('DEBUG_URL', '')
           if debug_url:
               entry['debug_url'] = debug_url
           data['symbols'].append(entry)

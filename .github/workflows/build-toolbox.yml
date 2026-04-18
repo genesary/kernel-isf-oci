@@ -1,4 +1,4 @@
-# Build and publish the forensic toolbox image with SLSA provenance.
+# Build and publish the forensic toolbox image with SLSA provenance + cosign.
 #
 # Contains: Volatility3, dwarf2json, vol-qemu, qemu_elf.py, mquire
 # Published as: ghcr.io/genesary/kernel-isf-toolbox:latest
@@ -17,6 +17,7 @@ permissions: {}
 
 env:
   REGISTRY: ghcr.io
+  TOOLBOX_IMAGE: ghcr.io/genesary/kernel-isf-toolbox:latest
 
 jobs:
   build:
@@ -48,14 +49,20 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Install cosign
+        uses: sigstore/cosign-installer@3454372f43399081ed03b604cb2d021dabca52bb # v3.8.2
+
       - name: Build and push toolbox
         uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
         with:
           context: .
           file: Dockerfile.tools
           push: true
-          tags: ${{ env.REGISTRY }}/genesary/kernel-isf-toolbox:latest
+          tags: ${{ env.TOOLBOX_IMAGE }}
           provenance: true
           sbom: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Sign image
+        run: cosign sign --yes "${{ env.TOOLBOX_IMAGE }}"

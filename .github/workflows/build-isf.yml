@@ -1,4 +1,4 @@
-# Build ISF symbols and push as OCI images with SLSA provenance.
+# Build ISF symbols and push as OCI images with SLSA provenance + cosign signing.
 #
 #   ghcr.io/genesary/kernel-isf-oci:<uname -r>          — scratch (ISF JSON only)
 #   ghcr.io/genesary/kernel-isf-oci:<uname -r>-busybox  — busybox (ISF + tools + entrypoint)
@@ -55,9 +55,10 @@ jobs:
 
       - name: Check if image already exists
         id: check
+        env:
+          KERNEL: ${{ inputs.kernel }}
         run: |
-          TAG="${{ inputs.kernel }}"
-          IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${TAG}"
+          IMAGE="${REGISTRY}/${IMAGE_NAME}:${KERNEL}"
           if docker manifest inspect "$IMAGE" > /dev/null 2>&1; then
             echo "[*] Image $IMAGE already exists — skipping build"
             echo "exists=true" >> "$GITHUB_OUTPUT"
@@ -77,9 +78,16 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Install cosign
+        if: steps.check.outputs.exists != 'true'
+        uses: sigstore/cosign-installer@3454372f43399081ed03b604cb2d021dabca52bb # v3.8.2
+
       # ── Build ISF JSON via the builder Dockerfile ──
       - name: Build ISF (builder stage)
         if: steps.check.outputs.exists != 'true'
+        env:
+          DEBUG_URL: ${{ inputs.debug_url }}
+          KERNEL: ${{ inputs.kernel }}
         uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
         with:
           context: .
@@ -96,16 +104,20 @@ jobs:
       # ── Extract the ISF JSON from builder ──
       - name: Extract ISF JSON
         if: steps.check.outputs.exists != 'true'
+        env:
+          KERNEL: ${{ inputs.kernel }}
         run: |
           docker create --name extract isf-builder:latest
           mkdir -p /tmp/isf-output
-          docker cp "extract:/output/${{ inputs.kernel }}.json" /tmp/isf-output/isf.json
+          docker cp "extract:/output/${KERNEL}.json" /tmp/isf-output/isf.json
           docker rm extract
           ls -lh /tmp/isf-output/
 
       # ── Build and push scratch image (ISF only) ──
       - name: Build and push scratch image
         if: steps.check.outputs.exists != 'true'
+        env:
+          KERNEL: ${{ inputs.kernel }}
         run: |
           cat > /tmp/Dockerfile.scratch <<'DOCKERFILE'
           FROM scratch
@@ -116,13 +128,15 @@ jobs:
             --provenance=true \
             --sbom=true \
             -f /tmp/Dockerfile.scratch \
-            -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.kernel }} \
+            -t "${REGISTRY}/${IMAGE_NAME}:${KERNEL}" \
             --push \
             /tmp/isf-output
 
       # ── Build and push busybox image ──
       - name: Build and push busybox image
         if: steps.check.outputs.exists != 'true'
+        env:
+          KERNEL: ${{ inputs.kernel }}
         run: |
           cat > /tmp/Dockerfile.busybox <<DOCKERFILE
           FROM busybox:stable
@@ -142,23 +156,36 @@ jobs:
             --provenance=true \
             --sbom=true \
             -f /tmp/Dockerfile.busybox \
-            -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.kernel }}-busybox \
+            -t "${REGISTRY}/${IMAGE_NAME}:${KERNEL}-busybox" \
             --push \
             /tmp/isf-output
+
+      # ── Sign images with cosign (keyless/Sigstore OIDC) ──
+      - name: Sign images
+        if: steps.check.outputs.exists != 'true'
+        env:
+          KERNEL: ${{ inputs.kernel }}
+        run: |
+          cosign sign --yes "${REGISTRY}/${IMAGE_NAME}:${KERNEL}"
+          cosign sign --yes "${REGISTRY}/${IMAGE_NAME}:${KERNEL}-busybox"
 
       # ── Update manifest status ──
       - name: Update symbol status
         if: steps.check.outputs.exists != 'true'
+        env:
+          KERNEL: ${{ inputs.kernel }}
+          DISTRO: ${{ inputs.distro }}
         run: |
-          DISTRO_FILE="symbols/${{ inputs.distro }}.yaml"
+          DISTRO_FILE="symbols/${DISTRO}.yaml"
           if [ -f "$DISTRO_FILE" ]; then
             python3 -c "
-          import yaml
-          f = '$DISTRO_FILE'
+          import yaml, os
+          f = os.environ['DISTRO_FILE']
+          k = os.environ['KERNEL']
           with open(f) as fh:
               data = yaml.safe_load(fh)
           for s in data.get('symbols', []):
-              if s.get('kernel') == '${{ inputs.kernel }}':
+              if s.get('kernel') == k:
                   s['status'] = 'built'
           with open(f, 'w') as fh:
               yaml.dump(data, fh, default_flow_style=False, sort_keys=False)
@@ -167,9 +194,11 @@ jobs:
 
       - name: Commit status update
         if: steps.check.outputs.exists != 'true'
+        env:
+          KERNEL: ${{ inputs.kernel }}
         run: |
           git config user.name "kernel-isf-bot[bot]"
           git config user.email "${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com"
           git add symbols/
-          git diff --cached --quiet || git commit -m "Mark ${{ inputs.kernel }} as built"
+          git diff --cached --quiet || git commit -m "Mark ${KERNEL} as built"
           git push || true
