@@ -1,0 +1,83 @@
+# One-shot workflow to cosign-sign all existing images in the registry.
+# Run manually via workflow_dispatch. Safe to run multiple times (idempotent).
+
+name: Sign Existing Images
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  sign:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Log in to GHCR
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@3454372f43399081ed03b604cb2d021dabca52bb # v3.8.2
+
+      - name: Sign all existing images
+        run: |
+          pip install pyyaml -q
+
+          python3 -c "
+          import yaml, subprocess, os
+          from pathlib import Path
+
+          registry = 'ghcr.io/genesary/kernel-isf-oci'
+          signed = 0
+          skipped = 0
+          failed = 0
+
+          for f in sorted(Path('symbols').glob('*.yaml')):
+              with open(f) as fh:
+                  data = yaml.safe_load(fh)
+              for s in data.get('symbols', []) or []:
+                  kernel = s.get('kernel', '')
+                  if not kernel:
+                      continue
+                  for suffix in ['', '-busybox']:
+                      tag = f'{registry}:{kernel}{suffix}'
+                      # Check if image exists
+                      check = subprocess.run(
+                          ['docker', 'manifest', 'inspect', tag],
+                          capture_output=True
+                      )
+                      if check.returncode != 0:
+                          continue
+                      # Sign it
+                      result = subprocess.run(
+                          ['cosign', 'sign', '--yes', tag],
+                          capture_output=True, text=True
+                      )
+                      if result.returncode == 0:
+                          print(f'  SIGNED: {tag}')
+                          signed += 1
+                      else:
+                          print(f'  FAILED: {tag} — {result.stderr.strip()[:100]}')
+                          failed += 1
+
+          # Also sign toolbox
+          toolbox = 'ghcr.io/genesary/kernel-isf-toolbox:latest'
+          check = subprocess.run(['docker', 'manifest', 'inspect', toolbox], capture_output=True)
+          if check.returncode == 0:
+              result = subprocess.run(['cosign', 'sign', '--yes', toolbox], capture_output=True, text=True)
+              if result.returncode == 0:
+                  print(f'  SIGNED: {toolbox}')
+                  signed += 1
+
+          print(f'\nDone: {signed} signed, {failed} failed')
+          "
