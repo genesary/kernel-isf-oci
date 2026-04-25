@@ -35,7 +35,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
       packages: write
       id-token: write
       attestations: write
@@ -169,36 +169,7 @@ jobs:
           cosign sign --yes "${REGISTRY}/${IMAGE_NAME}:${KERNEL}"
           cosign sign --yes "${REGISTRY}/${IMAGE_NAME}:${KERNEL}-busybox"
 
-      # ── Update manifest status ──
-      - name: Update symbol status
-        if: steps.check.outputs.exists != 'true'
-        env:
-          KERNEL: ${{ inputs.kernel }}
-          DISTRO: ${{ inputs.distro }}
-        run: |
-          DISTRO_FILE="symbols/${DISTRO}.yaml"
-          if [ -f "$DISTRO_FILE" ]; then
-            python3 -c "
-          import yaml, os
-          f = os.environ['DISTRO_FILE']
-          k = os.environ['KERNEL']
-          with open(f) as fh:
-              data = yaml.safe_load(fh)
-          for s in data.get('symbols', []):
-              if s.get('kernel') == k:
-                  s['status'] = 'built'
-          with open(f, 'w') as fh:
-              yaml.dump(data, fh, default_flow_style=False, sort_keys=False)
-          "
-          fi
-
-      - name: Commit status update
-        if: steps.check.outputs.exists != 'true'
-        env:
-          KERNEL: ${{ inputs.kernel }}
-        run: |
-          git config user.name "kernel-isf-bot[bot]"
-          git config user.email "${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com"
-          git add symbols/
-          git diff --cached --quiet || git commit -m "Mark ${KERNEL} as built"
-          git push || true
+      # Note: status tracking is done via the registry itself.
+      # If docker manifest inspect succeeds, the image is built.
+      # No need to update YAML manifests — avoids merge conflicts
+      # from parallel builds and keeps all commits reviewed via PR.
