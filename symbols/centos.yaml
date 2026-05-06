@@ -148,3 +148,11 @@ symbols:
   version: 10-stream
   debug_url: https://kojihub.stream.centos.org/kojifiles/packages/kernel/6.11.0/25.el10/x86_64/kernel-debuginfo-6.11.0-25.el10.x86_64.rpm
   status: pending
+- kernel: 6.12.0-224.el10.x86_64
+  version: 10-stream
+  debug_url: https://kojihub.stream.centos.org/kojifiles/packages/kernel/6.12.0/224.el10/x86_64/kernel-debuginfo-6.12.0-224.el10.x86_64.rpm
+  status: pending
+- kernel: 6.12.0-223.el10.x86_64
+  version: 10-stream
+  debug_url: https://kojihub.stream.centos.org/kojifiles/packages/kernel/6.12.0/223.el10/x86_64/kernel-debuginfo-6.12.0-223.el10.x86_64.rpm
+  status: pending
