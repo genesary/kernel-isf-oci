@@ -196,3 +196,15 @@ symbols:
   version: '43'
   debug_url: https://kojipkgs.fedoraproject.org/packages/kernel/6.19.14/200.fc43/x86_64/kernel-debuginfo-6.19.14-200.fc43.x86_64.rpm
   status: pending
+- kernel: 6.19.14-101.fc42.x86_64
+  version: '42'
+  debug_url: https://kojipkgs.fedoraproject.org/packages/kernel/6.19.14/101.fc42/x86_64/kernel-debuginfo-6.19.14-101.fc42.x86_64.rpm
+  status: pending
+- kernel: 6.19.14-101.fc43.x86_64
+  version: '43'
+  debug_url: https://kojipkgs.fedoraproject.org/packages/kernel/6.19.14/101.fc43/x86_64/kernel-debuginfo-6.19.14-101.fc43.x86_64.rpm
+  status: pending
+- kernel: 7.0.4-100.fc43.x86_64
+  version: '43'
+  debug_url: https://kojipkgs.fedoraproject.org/packages/kernel/7.0.4/100.fc43/x86_64/kernel-debuginfo-7.0.4-100.fc43.x86_64.rpm
+  status: pending
