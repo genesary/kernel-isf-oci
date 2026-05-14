@@ -28,7 +28,7 @@ RUN apk add --no-cache musl-dev git && \
     cp target/release/mquire /mquire
 
 # ── Stage: Python dependencies ───────────────────────────────────────────
-FROM python:3.12-alpine AS python-build
+FROM python:3.14-alpine AS python-build
 
 RUN pip install --no-cache-dir \
     volatility3 \
@@ -38,7 +38,7 @@ RUN pip install --no-cache-dir \
     pycryptodome
 
 # ── Final image ──────────────────────────────────────────────────────────
-FROM python:3.12-alpine
+FROM python:3.14-alpine
 
 COPY --from=python-build /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 COPY --from=python-build /usr/local/bin/vol /usr/local/bin/vol
