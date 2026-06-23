@@ -10,7 +10,7 @@
 # Output: /output/<SYMBOL_ID>.json
 
 # ── Stage 1: Build dwarf2json ───────────────────────────────────────────
-FROM golang:1.22-alpine AS dwarf2json-build
+FROM golang:1.26-alpine AS dwarf2json-build
 
 RUN apk add --no-cache git && \
     git clone --depth 1 https://github.com/volatilityfoundation/dwarf2json.git /src && \
