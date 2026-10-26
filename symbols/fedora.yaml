@@ -196,3 +196,35 @@ symbols:
   version: '43'
   debug_url: https://kojipkgs.fedoraproject.org/packages/kernel/6.19.14/200.fc43/x86_64/kernel-debuginfo-6.19.14-200.fc43.x86_64.rpm
   status: pending
+- kernel: 7.2.12-100.fc43.x86_64
+  version: '43'
+  debug_url: https://kojipkgs.fedoraproject.org/packages/kernel/7.2.12/100.fc43/x86_64/kernel-debuginfo-7.2.12-100.fc43.x86_64.rpm
+  status: pending
+- kernel: 7.2.3-300.fc43.x86_64
+  version: '43'
+  debug_url: https://kojipkgs.fedoraproject.org/packages/kernel/7.2.3/300.fc43/x86_64/kernel-debuginfo-7.2.3-300.fc43.x86_64.rpm
+  status: pending
+- kernel: 7.2.2-300.fc43.x86_64
+  version: '43'
+  debug_url: https://kojipkgs.fedoraproject.org/packages/kernel/7.2.2/300.fc43/x86_64/kernel-debuginfo-7.2.2-300.fc43.x86_64.rpm
+  status: pending
+- kernel: 7.2.11-100.fc43.x86_64
+  version: '43'
+  debug_url: https://kojipkgs.fedoraproject.org/packages/kernel/7.2.11/100.fc43/x86_64/kernel-debuginfo-7.2.11-100.fc43.x86_64.rpm
+  status: pending
+- kernel: 7.2.10-100.fc43.x86_64
+  version: '43'
+  debug_url: https://kojipkgs.fedoraproject.org/packages/kernel/7.2.10/100.fc43/x86_64/kernel-debuginfo-7.2.10-100.fc43.x86_64.rpm
+  status: pending
+- kernel: 7.1.6-101.fc43.x86_64
+  version: '43'
+  debug_url: https://kojipkgs.fedoraproject.org/packages/kernel/7.1.6/101.fc43/x86_64/kernel-debuginfo-7.1.6-101.fc43.x86_64.rpm
+  status: pending
+- kernel: 7.2.9-100.fc43.x86_64
+  version: '43'
+  debug_url: https://kojipkgs.fedoraproject.org/packages/kernel/7.2.9/100.fc43/x86_64/kernel-debuginfo-7.2.9-100.fc43.x86_64.rpm
+  status: pending
+- kernel: 7.2.9-101.fc43.x86_64
+  version: '43'
+  debug_url: https://kojipkgs.fedoraproject.org/packages/kernel/7.2.9/101.fc43/x86_64/kernel-debuginfo-7.2.9-101.fc43.x86_64.rpm
+  status: pending
